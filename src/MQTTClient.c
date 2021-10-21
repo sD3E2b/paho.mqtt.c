@@ -364,6 +364,7 @@ static MQTTPacket* MQTTClient_waitfor(MQTTClient handle, int packet_type, int* r
 /*static int pubCompare(void* a, void* b); */
 static void MQTTProtocol_checkPendingWrites(void);
 static void MQTTClient_writeComplete(int socket, int rc);
+static void MQTTClient_yield_internal(ELAPSED_TIME_TYPE timeout, ELAPSED_TIME_TYPE elapsed);
 
 
 int MQTTClient_createWithOptions(MQTTClient* handle, const char* serverURI, const char* clientId,
@@ -2740,13 +2741,26 @@ exit:
 	return rc;
 }
 
+void MQTTClient_yield_internal(ELAPSED_TIME_TYPE timeout, ELAPSED_TIME_TYPE elapsed)
+{
+	int rc = 0;
+	int sock = -1;
+	MQTTClient_cycle(&sock, (timeout > elapsed) ? timeout - elapsed : 0L, &rc);
+	Thread_lock_mutex(mqttclient_mutex);
+	if (rc == SOCKET_ERROR && ListFindItem(handles, &sock, clientSockCompare))
+	{
+		MQTTClients* m = (MQTTClient)(handles->current->content);
+		if (m->c->connect_state != DISCONNECTING)
+		MQTTClient_disconnect_internal(m, 0);
+	}
+	Thread_unlock_mutex(mqttclient_mutex);
+}
 
 void MQTTClient_yield(void)
 {
 	START_TIME_TYPE start = MQTTTime_start_clock();
 	ELAPSED_TIME_TYPE elapsed = 0L;
 	ELAPSED_TIME_TYPE timeout = 100L;
-	int rc = 0;
 
 	FUNC_ENTRY;
 	if (running) /* yield is not meant to be called in a multi-thread environment */
@@ -2758,16 +2772,7 @@ void MQTTClient_yield(void)
 	elapsed = MQTTTime_elapsed(start);
 	do
 	{
-		int sock = -1;
-		MQTTClient_cycle(&sock, (timeout > elapsed) ? timeout - elapsed : 0L, &rc);
-		Thread_lock_mutex(mqttclient_mutex);
-		if (rc == SOCKET_ERROR && ListFindItem(handles, &sock, clientSockCompare))
-		{
-			MQTTClients* m = (MQTTClient)(handles->current->content);
-			if (m->c->connect_state != DISCONNECTING)
-				MQTTClient_disconnect_internal(m, 0);
-		}
-		Thread_unlock_mutex(mqttclient_mutex);
+		MQTTClient_yield_internal(timeout, elapsed);
 		elapsed = MQTTTime_elapsed(start);
 	}
 	while (elapsed < timeout);
@@ -2813,7 +2818,7 @@ int MQTTClient_waitForCompletion(MQTTClient handle, MQTTClient_deliveryToken mdt
 			goto exit;
 		}
 		Thread_unlock_mutex(mqttclient_mutex);
-		MQTTClient_yield();
+		MQTTClient_yield_internal(timeout, 0L);
 		Thread_lock_mutex(mqttclient_mutex);
 		elapsed = MQTTTime_elapsed(start);
 	}
