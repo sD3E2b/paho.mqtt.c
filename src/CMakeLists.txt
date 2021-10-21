@@ -118,14 +118,14 @@ IF (PAHO_BUILD_SHARED)
 		SET(MQTTASYNC_ENTRY_POINT MQTTAsync_init)
 	ENDIF()
 
-    IF (NOT WIN32)
-        SET_TARGET_PROPERTIES(
-            paho-mqtt3c PROPERTIES
-            LINK_FLAGS "-Wl,-init,${MQTTCLIENT_ENTRY_POINT}")
-        SET_TARGET_PROPERTIES(
-            paho-mqtt3a PROPERTIES
-            LINK_FLAGS "-Wl,-init,${MQTTASYNC_ENTRY_POINT}")
-    ENDIF()
+    # IF (NOT WIN32)
+    #     SET_TARGET_PROPERTIES(
+    #         paho-mqtt3c PROPERTIES
+    #         LINK_FLAGS "-Wl,-init,${MQTTCLIENT_ENTRY_POINT}")
+    #     SET_TARGET_PROPERTIES(
+    #         paho-mqtt3a PROPERTIES
+    #         LINK_FLAGS "-Wl,-init,${MQTTASYNC_ENTRY_POINT}")
+    # ENDIF()
 
     FOREACH(TARGET paho-mqtt3c paho-mqtt3a)
         TARGET_INCLUDE_DIRECTORIES(${TARGET}
